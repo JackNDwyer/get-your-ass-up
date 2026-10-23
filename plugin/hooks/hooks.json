@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -o /dev/null --max-time 1 -X POST http://127.0.0.1:${GYAU_PORT:-7777}/work-started || true",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -o /dev/null --max-time 1 -X POST http://127.0.0.1:${GYAU_PORT:-7777}/work-finished || true",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -o /dev/null --max-time 1 -X POST http://127.0.0.1:${GYAU_PORT:-7777}/needs-you || true",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

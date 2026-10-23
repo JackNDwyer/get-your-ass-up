@@ -1,0 +1,14 @@
+{
+  "name": "get-your-ass-up",
+  "description": "Get Your Ass Up: work out while Claude Code works.",
+  "owner": {
+    "name": "Jack Dwyer"
+  },
+  "plugins": [
+    {
+      "name": "get-your-ass-up",
+      "source": "./plugin",
+      "description": "Tells the local voice coach when Claude starts and stops working."
+    }
+  ]
+}

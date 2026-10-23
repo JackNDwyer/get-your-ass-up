@@ -1,0 +1,10 @@
+{
+  "name": "get-your-ass-up",
+  "description": "A snarky voice coach yells workouts at you while Claude Code is working.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jack Dwyer"
+  },
+  "license": "MIT",
+  "keywords": ["fitness", "voice", "livekit", "hooks"]
+}

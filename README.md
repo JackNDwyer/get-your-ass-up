@@ -78,9 +78,47 @@ You can talk to the coach at any time.
 - **"Done."** or **"Did fifteen squats."** logs your reps.
 - **"I'm tired."** gets judged. Weak excuses cost you extra reps. A real one ("I'm on a call") gets a pass.
 - **"How many today?"** reads out your stats.
+- **"How many R's in strawberry?"** or **"Compare my pushups this week to last week and make me a
+  chart."** makes the coach write Python, run it in a sandbox, and answer from the output. Charts
+  pop up on your screen.
 
 Reps are logged to `~/.get-your-ass-up/log.jsonl`. `/workout-stats` in Claude Code prints today's
 totals in one line, like `Today: 140 pushups · 3 min of plank`.
+
+## The Python sandbox
+
+The coach has a `run_python` tool for counting, math and charts of your workout history. The code
+runs in a throwaway Docker container with:
+
+- no network, a read-only filesystem, 512 MB of memory, one CPU and a 30 second timeout
+- your workout log mounted read-only at `/data/log.jsonl`
+- one writable folder, `~/.get-your-ass-up/charts/<run>/`, for charts. Nothing else on your machine is writable.
+- output capped at 2,000 characters
+
+Every piece of code it runs is printed in the coach's terminal, so you can see exactly what ran.
+
+You need Docker. On a Mac, [Colima](https://github.com/abiosoft/colima) is the lightest option:
+
+```bash
+brew install colima docker   # once
+colima start
+docker build -t gyau-sandbox sandbox   # once, takes about a minute
+```
+
+Without Docker the coach still works. `run_python` just returns an error.
+
+### Demo data
+
+To film the chart demo without two weeks of real workouts, seed a separate fake log and point the
+coach at it. Your real log isn't touched.
+
+```bash
+uv run scripts/seed_demo_log.py      # writes ~/.get-your-ass-up/demo-log.jsonl, ending today
+GYAU_LOG=~/.get-your-ass-up/demo-log.jsonl lk agent console coach.py
+```
+
+The fake data is deliberately worse this week than last, so there's something to roast. Rerun the
+seed script on the day you film so "this week" lines up with today.
 
 ## Safety
 
@@ -103,7 +141,7 @@ Set these in `.env.local` or your shell:
 | `GYAU_PORT`    | `7777`                             | Port for the hooks. Set the same value where Claude Code runs. |
 | `GYAU_LOG`     | `~/.get-your-ass-up/log.jsonl`     | Where reps are logged                       |
 | `COACH_LLM`    | `openai/gpt-4.1-mini`              | Any [LiveKit Inference](https://docs.livekit.io/agents/models/inference/) LLM |
-| `COACH_STT`    | `assemblyai/universal-3-6-pro`     | Speech-to-text model                        |
+| `COACH_STT`    | `assemblyai/universal-3-6-pro`     | Speech-to-text model. `deepgram/nova-3` is a good alternative. |
 | `COACH_TTS`, `COACH_VOICE` | `fishaudio/s2.1-pro`, a default voice | Text-to-speech model and voice. Pick something angrier. |
 
 ## Development
@@ -112,13 +150,16 @@ Set these in `.env.local` or your shell:
 uv run pytest
 ```
 
-The tests cover the timer and event logic, excuses, the log and the HTTP endpoints. None of them
-need audio or LiveKit.
+The tests cover the timer and event logic, excuses, the log, the HTTP endpoints and the sandbox
+plumbing. None of them need audio, LiveKit or the network. One test also checks the real container
+has no network, and is skipped when Docker or the image isn't available.
 
 | File                               | What's in it                                                  |
 | ---------------------------------- | ------------------------------------------------------------- |
 | `coach.py`                         | The LiveKit agent: personality, tools, session setup          |
 | `coach_core.py`                    | Timers, workouts, excuses, the log, the HTTP server           |
+| `sandbox.py`, `sandbox/Dockerfile` | The locked-down container `run_python` uses                   |
+| `scripts/seed_demo_log.py`         | Fake two-week log for demos                                   |
 | `plugin/hooks/hooks.json`          | The three Claude Code hooks                                   |
 | `plugin/commands/workout-stats.md` | `/workout-stats`                                              |
 | `plugin/scripts/workout_stats.py`  | Reads the log. Uses only the standard library, so the plugin needs nothing installed. |

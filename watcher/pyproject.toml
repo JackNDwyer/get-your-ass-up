@@ -1,0 +1,9 @@
+[project]
+name = "gyau-watcher"
+version = "0.1.0"
+description = "Webcam watcher for Get Your Ass Up: what you're doing, and your reps."
+requires-python = ">=3.12"
+dependencies = [
+    # mediapipe pulls in opencv-contrib-python; don't add opencv-python too, the two clash.
+    "mediapipe>=1.1",
+]

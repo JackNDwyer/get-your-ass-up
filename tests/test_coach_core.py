@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from coach_core import Coach, WorkoutLog, build_http_app, number_words, reps_for
+from coach_core import DONE_LINES, NEEDS_YOU_LINE, Coach, WorkoutLog, build_http_app, number_words, reps_for
 from plugin.scripts.workout_stats import summary_line, today_totals
 
 # Real timers, just short ones.
@@ -62,10 +62,40 @@ async def test_finish_after_timer_says_sit(coach, said):
     coach.work_started()
     await asyncio.sleep(DELAY * 1.5)
     coach.work_finished()
-    assert said[-1] == "Agent's done. You may sit."
+    assert said[-1] == DONE_LINES[0]
     # A second Stop (e.g. after a follow-up with no new workout) stays quiet.
     coach.work_finished()
-    assert said.count("Agent's done. You may sit.") == 1
+    assert sum(line in DONE_LINES for line in said) == 1
+
+
+async def test_done_lines_rotate(coach, said):
+    for _ in range(2):
+        coach.work_started()
+        await asyncio.sleep(DELAY * 1.5)
+        coach.work_finished()
+    assert [line for line in said if line in DONE_LINES] == list(DONE_LINES[:2])
+
+
+async def test_reaction_waits_a_beat(log, said):
+    coach = Coach(said.append, log=log, first_delay=DELAY, react_delay=DELAY)
+    coach.work_started()
+    await asyncio.sleep(DELAY * 1.5)
+    coach.work_finished()
+    assert said[-1] != DONE_LINES[0]  # not yet
+    await asyncio.sleep(DELAY * 1.5)
+    assert said[-1] == DONE_LINES[0]
+
+
+async def test_new_work_cancels_pending_reaction(log, said):
+    coach = Coach(said.append, log=log, first_delay=DELAY, react_delay=DELAY)
+    coach.work_started()
+    await asyncio.sleep(DELAY * 1.5)
+    coach.work_finished()
+    coach.work_started()  # Claude picked straight back up
+    await asyncio.sleep(DELAY * 0.8)
+    coach.work_finished()
+    await asyncio.sleep(DELAY * 2)
+    assert DONE_LINES[0] not in said
 
 
 async def test_keeps_assigning_and_rotates_while_working(coach, said):
@@ -90,7 +120,7 @@ async def test_needs_you_cancels_timer(coach, said):
     coach.work_started()
     coach.needs_you()
     await asyncio.sleep(DELAY * 2)
-    assert said == ["Claude needs you. Back to the desk."]
+    assert said == [NEEDS_YOU_LINE]
     assert not coach.working
 
 
@@ -186,12 +216,41 @@ async def test_http_endpoints(coach, said):
         assert (await client.post("/work-started")).status == 200
         await asyncio.sleep(DELAY * 1.5)
         status = await (await client.get("/status")).json()
-        assert status == {"working": True, "resting": False, "current": "10 pushups"}
+        assert {k: status[k] for k in ("working", "resting", "current", "block")} == {
+            "working": True,
+            "resting": False,
+            "current": "10 pushups",
+            "block": False,
+        }
 
         assert (await client.post("/work-finished")).status == 200
         assert (await client.post("/needs-you")).status == 200
         assert said == [
             "Get your ass up. Ten pushups!",
-            "Agent's done. You may sit.",
-            "Claude needs you. Back to the desk.",
+            DONE_LINES[0],
+            NEEDS_YOU_LINE,
         ]
+
+
+async def test_camera_nags_and_grows_an_unpaid_workout(log, said):
+    coach = Coach(said.append, log=log, first_delay=DELAY, repeat_every=10, nag_every=REPEAT)
+    coach.saw("desk")
+    coach.work_started()
+    await asyncio.sleep(DELAY * 1.5)
+    assert said == ["Get your ass up. Ten pushups!"]
+    await asyncio.sleep(REPEAT * 1.6)
+    assert said[-1].startswith("Still not moving. Five more pushups.")
+    assert coach.current.count == 15
+    coach.work_finished()
+
+
+async def test_camera_does_not_nag_while_you_exercise(log, said):
+    coach = Coach(said.append, log=log, first_delay=DELAY, repeat_every=10, nag_every=REPEAT)
+    coach.saw("desk")
+    coach.work_started()
+    await asyncio.sleep(DELAY * 1.5)
+    for _ in range(4):
+        coach.saw("exercising")
+        await asyncio.sleep(REPEAT / 2)
+    assert len(said) == 1
+    coach.work_finished()

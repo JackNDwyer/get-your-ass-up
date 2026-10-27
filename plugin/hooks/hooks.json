@@ -5,7 +5,31 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -o /dev/null --max-time 1 -X POST http://127.0.0.1:${GYAU_PORT:-7777}/work-started || true",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" prompt; [ $? -eq 2 ] && exit 2 || exit 0",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" tool || true",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" tool-failed || true",
             "timeout": 3
           }
         ]
@@ -16,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -o /dev/null --max-time 1 -X POST http://127.0.0.1:${GYAU_PORT:-7777}/work-finished || true",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" stop || true",
             "timeout": 3
           }
         ]
@@ -27,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -o /dev/null --max-time 1 -X POST http://127.0.0.1:${GYAU_PORT:-7777}/needs-you || true",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" notify || true",
             "timeout": 3
           }
         ]

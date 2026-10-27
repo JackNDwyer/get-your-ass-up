@@ -43,6 +43,21 @@ class SandboxResult:
         return result
 
 
+NO_DOCKER = (
+    "The Python sandbox is off: Docker isn't installed. It's optional; see the README's "
+    "'The Python sandbox' section to set it up."
+)
+
+
+def explain_docker_error(stderr: str) -> str:
+    """Swap Docker's setup errors for what to do about them. Real Python errors pass through."""
+    if "Cannot connect to the Docker daemon" in stderr or "docker daemon is not running" in stderr.lower():
+        return "The Python sandbox is off: Docker isn't running. Start it (on a Mac: colima start)."
+    if "No such image" in stderr or "Unable to find image" in stderr or "pull access denied" in stderr:
+        return f"The Python sandbox image isn't built yet. Run: docker build -t {IMAGE} sandbox"
+    return stderr
+
+
 def truncate(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:
     if len(text) <= limit:
         return text
@@ -52,6 +67,8 @@ def truncate(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:
 def docker_command(name: str, log_path: Path, out_dir: Path, *, image: str = IMAGE) -> list[str]:
     cmd = [
         "docker", "run", "--rm", "-i",
+        # Only ever the image you built locally; never pull a same-named one from Docker Hub.
+        "--pull", "never",
         "--name", name,
         "--network", "none",
         "--read-only",
@@ -78,6 +95,9 @@ async def run_in_sandbox(
     timeout: float = TIMEOUT,
     image: str = IMAGE,
 ) -> SandboxResult:
+    if shutil.which("docker") is None:
+        return SandboxResult(exit_code=1, stderr=NO_DOCKER)
+
     out_dir = charts_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
     out_dir.mkdir(parents=True)
     name = f"gyau-{out_dir.name}"
@@ -104,7 +124,7 @@ async def run_in_sandbox(
         stdout, stderr = b"", b""
 
     result.stdout = truncate(stdout.decode(errors="replace").strip())
-    result.stderr = truncate(stderr.decode(errors="replace").strip())
+    result.stderr = explain_docker_error(truncate(stderr.decode(errors="replace").strip()))
     result.charts = sorted(out_dir.glob("*.png"))
     if not any(out_dir.iterdir()):
         out_dir.rmdir()

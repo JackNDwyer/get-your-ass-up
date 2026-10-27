@@ -1,8 +1,19 @@
-.env.local
+# Secrets: LiveKit keys live in .env.local (written by `lk app env -w`)
 .env
+.env.*
+!.env.example
+
+# Python and uv
 .venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Anything personal that might end up in the repo folder
+*.jsonl
+*.log
+charts/
+models/
+*.task
 console-recordings/
 .DS_Store

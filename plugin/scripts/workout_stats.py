@@ -50,6 +50,21 @@ def read_events(path: Path = LOG_PATH, day: date | None = None) -> list[dict]:
     return events
 
 
+def tab_balance(path: Path = LOG_PATH) -> dict[str, int]:
+    """Reps put on the tab and not yet paid off, all time (a tab doesn't reset at midnight)."""
+    if not path.exists():
+        return {}
+    tab: Counter[str] = Counter()
+    for line in path.read_text().splitlines():
+        try:
+            event = json.loads(line)
+            if event["type"] == "tab":
+                tab[event["exercise"]] += int(event["count"])
+        except (ValueError, KeyError):
+            continue
+    return {exercise: n for exercise, n in tab.items() if n > 0}
+
+
 def today_totals(path: Path = LOG_PATH, day: date | None = None) -> dict:
     events = read_events(path, day)
     reps: Counter[str] = Counter()
@@ -61,6 +76,7 @@ def today_totals(path: Path = LOG_PATH, day: date | None = None) -> dict:
         "workouts_assigned": sum(e["type"] == "assigned" for e in events),
         "excuses": sum(e["type"] == "excuse" for e in events),
         "weak_excuses": sum(e["type"] == "excuse" and e.get("verdict") == "weak" for e in events),
+        "tab": tab_balance(path),
     }
 
 
@@ -71,13 +87,17 @@ def _plank(seconds: int) -> str:
     return f"{minutes:g} min of plank"
 
 
+def _amounts(counts: dict[str, int]) -> list[str]:
+    order = EXERCISES + sorted(set(counts) - set(EXERCISES))
+    return [_plank(counts[e]) if e == "plank" else f"{counts[e]} {e}" for e in order if counts.get(e)]
+
+
 def summary_line(totals: dict) -> str:
-    reps = totals["reps"]
-    if not reps:
-        return "Today: nothing. Get your ass up."
-    order = EXERCISES + sorted(set(reps) - set(EXERCISES))
-    parts = [_plank(reps[e]) if e == "plank" else f"{reps[e]} {e}" for e in order if reps.get(e)]
-    return "Today: " + " · ".join(parts)
+    reps, tab = totals["reps"], totals.get("tab") or {}
+    line = "Today: " + " · ".join(_amounts(reps)) if reps else "Today: nothing. Get your ass up."
+    if tab:
+        line += " · On the tab: " + ", ".join(_amounts(tab))
+    return line
 
 
 if __name__ == "__main__":
